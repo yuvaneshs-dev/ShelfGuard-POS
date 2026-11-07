@@ -205,7 +205,7 @@ if (paymentSuccessful) {
                 System.out.println("Shutting down ShelfGuard POS... Have a great day!");
                 break; 
             } else {
-                System.out.println("[ERROR] Invalid option. Please choose a number from 1 to 7.");
+                System.out.println("[ERROR] Invalid option. Please choose a number from 1 to 8.");
             }
         }
         scanner.close();
