@@ -22,9 +22,9 @@ public class ProductDAO {
             pstmt.setDouble(6, customDiscount);
             
             pstmt.executeUpdate();
-            System.out.println("✅ Product '" + productName + "' saved to MySQL successfully!");
+            System.out.println("[SUCCESS] Product '" + productName + "' saved to MySQL successfully!");
         } catch (SQLException e) {
-            System.out.println("❌ Error saving product: " + e.getMessage());
+            System.out.println("[ERROR] Error saving product: " + e.getMessage());
         }
     }
 
@@ -36,9 +36,9 @@ public class ProductDAO {
             pstmt.setInt(2, quantity);
             pstmt.setString(3, expiryDateStr); 
             pstmt.executeUpdate();
-            System.out.println("✅ Stock batch added successfully!");
+            System.out.println("[SUCCESS] Stock batch added successfully!");
         } catch (SQLException e) {
-            System.out.println("❌ Error adding stock batch: " + e.getMessage());
+            System.out.println("[ERROR] Error adding stock batch: " + e.getMessage());
         }
     }
 
@@ -62,7 +62,7 @@ public class ProductDAO {
                 );
             }
         } catch (SQLException e) {
-            System.out.println("❌ Error fetching product: " + e.getMessage());
+            System.out.println("[ERROR] Error fetching product: " + e.getMessage());
         }
         return null;
     }
@@ -79,7 +79,7 @@ public class ProductDAO {
                 return (int) Math.max(0, daysBetween);
             }
         } catch (SQLException e) {
-            System.out.println("❌ Error fetching batch expiry: " + e.getMessage());
+            System.out.println("[ERROR] Error fetching batch expiry: " + e.getMessage());
         }
         return 999; 
     }
@@ -100,7 +100,7 @@ public class ProductDAO {
                 return new double[]{limit, due}; 
             }
         } catch (SQLException e) {
-            System.out.println("❌ Error fetching customer: " + e.getMessage());
+            System.out.println("[ERROR] Error fetching customer: " + e.getMessage());
         }
         return null; // Returns null if customer is not found
     }
@@ -113,9 +113,9 @@ public class ProductDAO {
             pstmt.setString(2, name);
             pstmt.setDouble(3, creditLimit);
             pstmt.executeUpdate();
-            System.out.println("✅ Customer '" + name + "' registered successfully for Khata!");
+            System.out.println("[SUCCESS] Customer '" + name + "' registered successfully for Khata!");
         } catch (SQLException e) {
-            System.out.println("❌ Error adding customer (Phone number might already exist): " + e.getMessage());
+            System.out.println("[ERROR] Error adding customer (Phone number might already exist): " + e.getMessage());
         }
     }
 
@@ -132,7 +132,7 @@ public class ProductDAO {
             pstmt.setString(2, phone);
             pstmt.executeUpdate();
         } catch (SQLException e) {
-            System.out.println("❌ Error updating Khata balance: " + e.getMessage());
+            System.out.println("[ERROR] Error updating Khata balance: " + e.getMessage());
         }
     }
     // --- NEW: Manager's Morning Expiry Report ---
@@ -149,7 +149,7 @@ public class ProductDAO {
             
             ResultSet rs = pstmt.executeQuery();
             System.out.println("\n==========================================");
-            System.out.println("       🚨 7-DAY EXPIRY ALERT REPORT       ");
+            System.out.println("       [ALERT] 7-DAY EXPIRY ALERT REPORT       ");
             System.out.println("==========================================");
             
             boolean foundExpiringItems = false;
@@ -161,12 +161,12 @@ public class ProductDAO {
             }
             
             if (!foundExpiringItems) {
-                System.out.println("✅ All stock is fresh. Nothing expiring in the next 7 days!");
+                System.out.println("[SUCCESS] All stock is fresh. Nothing expiring in the next 7 days!");
             }
             System.out.println("==========================================");
             
         } catch (SQLException e) {
-            System.out.println("❌ Error generating report: " + e.getMessage());
+            System.out.println("[ERROR] Error generating report: " + e.getMessage());
         }
     }
     // --- NEW: Manager Update Price Feature ---
@@ -180,12 +180,12 @@ public class ProductDAO {
             
             int rowsAffected = pstmt.executeUpdate();
             if (rowsAffected > 0) {
-                System.out.println("✅ Success: Price of '" + productName + "' updated to Rs. " + String.format("%.2f", newPrice));
+                System.out.println("[SUCCESS] Success: Price of '" + productName + "' updated to Rs. " + String.format("%.2f", newPrice));
             } else {
-                System.out.println("❌ Error: Product '" + productName + "' not found in the database.");
+                System.out.println("[ERROR] Error: Product '" + productName + "' not found in the database.");
             }
         } catch (SQLException e) {
-            System.out.println("❌ Error updating price: " + e.getMessage());
+            System.out.println("[ERROR] Error updating price: " + e.getMessage());
         }
     }
     // --- NEW: Save the Master Bill ---
@@ -202,7 +202,7 @@ public class ProductDAO {
                     customerId = rs.getInt("customer_id");
                 }
             } catch (SQLException e) {
-                System.out.println("❌ Error fetching customer ID: " + e.getMessage());
+                System.out.println("[ERROR] Error fetching customer ID: " + e.getMessage());
             }
         }
 
@@ -225,10 +225,11 @@ public class ProductDAO {
                 return generatedKeys.getInt(1); // Returns the newly generated bill_id
             }
         } catch (SQLException e) {
-            System.out.println("❌ Error saving Bill: " + e.getMessage());
+            System.out.println("[ERROR] Error saving Bill: " + e.getMessage());
         }
         return -1; 
     }
+
 
     // --- NEW: Save individual items linked to the bill ---
     public void saveBillItem(int billId, int productId, int quantity, double itemTotal) {
@@ -247,7 +248,75 @@ public class ProductDAO {
             
             pstmt.executeUpdate();
         } catch (SQLException e) {
-            System.out.println("❌ Error saving cart item: " + e.getMessage());
+            System.out.println("[ERROR] Error saving cart item: " + e.getMessage());
         }
     }
+    public boolean deductStockFIFO(int productId, int quantityNeeded) {
+    String selectQuery = "SELECT batch_id, quantity_available FROM Stock_Batches WHERE product_id = ? AND quantity_available > 0 ORDER BY expiry_date ASC";
+    String updateQuery = "UPDATE Stock_Batches SET quantity_available = ? WHERE batch_id = ?";
+    
+    Connection conn = null;
+    try {
+        conn = DBConnection.getConnection();
+        if (conn == null) return false;
+        conn.setAutoCommit(false); // Enable transaction control
+        
+        try (PreparedStatement pstmtSelect = conn.prepareStatement(selectQuery);
+             PreparedStatement pstmtUpdate = conn.prepareStatement(updateQuery)) {
+            
+            pstmtSelect.setInt(1, productId);
+            ResultSet rs = pstmtSelect.executeQuery();
+            
+            int remainingNeeded = quantityNeeded;
+            
+            while (rs.next() && remainingNeeded > 0) {
+                int batchId = rs.getInt("batch_id");
+                int available = rs.getInt("quantity_available");
+                
+                if (available >= remainingNeeded) {
+                    pstmtUpdate.setInt(1, available - remainingNeeded);
+                    pstmtUpdate.setInt(2, batchId);
+                    pstmtUpdate.executeUpdate();
+                    remainingNeeded = 0;
+                } else {
+                    pstmtUpdate.setInt(1, 0);
+                    pstmtUpdate.setInt(2, batchId);
+                    pstmtUpdate.executeUpdate();
+                    remainingNeeded -= available;
+                }
+            }
+            
+            if (remainingNeeded > 0) {
+                conn.rollback();
+                System.out.println("[ERROR] Error: Insufficient stock across batches!");
+                return false;
+            }
+            
+            conn.commit();
+            return true;
+            
+        } catch (SQLException e) {
+            if (conn != null) {
+                try { conn.rollback(); } catch (SQLException ex) { ex.printStackTrace(); }
+            }
+            System.out.println("[ERROR] Error during stock batch update: " + e.getMessage());
+            return false;
+        } finally {
+            if (conn != null) {
+                try { conn.setAutoCommit(true); conn.close(); } catch (SQLException ex) { ex.printStackTrace(); }
+            }
+        }
+    } catch (SQLException e) {
+        System.out.println("[ERROR] Database Connection Error: " + e.getMessage());
+        return false;
+    }
 }
+    public void restockProductByName(String productName, int quantity, String expiryDate) {
+        Product prod = getProductByName(productName);
+        if (prod != null) {
+            addStockBatch(prod.getProductId(), quantity, expiryDate);
+        } else {
+            System.out.println("Error: Product '" + productName + "' not found in the master catalog.");
+        }
+    }
+} // <--- End of ProductDAO class
