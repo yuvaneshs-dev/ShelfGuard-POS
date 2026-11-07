@@ -13,11 +13,11 @@ public class DBConnection {
             // Load MySQL JDBC Driver
             Class.forName("com.mysql.cj.jdbc.Driver");
             conn = DriverManager.getConnection(URL, USER, PASSWORD);
-            System.out.println("✅ Success! Connected to ShelfGuardDB MySQL database.");
+            System.out.println("[SUCCESS] Success! Connected to ShelfGuardDB MySQL database.");
         } catch (ClassNotFoundException e) {
-            System.out.println("❌ MySQL JDBC Driver not found in your project! " + e.getMessage());
+            System.out.println("[ERROR] MySQL JDBC Driver not found in your project! " + e.getMessage());
         } catch (SQLException e) {
-            System.out.println("❌ Database Connection Failed! Check your username/password. " + e.getMessage());
+            System.out.println("[ERROR] Database Connection Failed! Check your username/password. " + e.getMessage());
         }
         return conn;
     }
