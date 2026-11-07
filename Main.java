@@ -15,9 +15,10 @@ public class Main {
             System.out.println("3. Start Customer Checkout (Cashier Billing)");
             System.out.println("4. Open New Customer Khata Account");
             System.out.println("5. Receive Khata Payment (Clear Due Balance)");
-            System.out.println("6. Check Expiring Stock (Morning Report)");
-            System.out.println("7. Exit System");
-            System.out.print("Select an option (1 to 7): ");
+            System.out.println("6. Check Expiring Stock (Morning Report)"); 
+            System.out.println("7. Restock Existing Product (Manager Tool)");
+            System.out.println("8. Exit System"); // Add this line
+            System.out.print("Select an option (1 to 8): ");                  // Update range prompt
             
             String choice = scanner.nextLine();
 
@@ -85,7 +86,7 @@ public class Main {
                         
                         System.out.println("   -> Added to cart | Item Total: Rs. " + String.format("%.2f", itemTotal));
                     } else {
-                        System.out.println("❌ Product not found. Try again.");
+                        System.out.println("[ERROR] Product not found. Try again.");
                     }
                 }
 
@@ -120,7 +121,7 @@ public class Main {
                     double[] creditInfo = productDAO.getCustomerCreditDetails(finalPhone);
                     
                     if (creditInfo == null) {
-                        System.out.println("❌ Customer not found. Transaction cancelled.");
+                        System.out.println("[ERROR] Customer not found. Transaction cancelled.");
                     } else {
                         double availableCredit = creditInfo[0] - creditInfo[1];
                         try {
@@ -128,28 +129,38 @@ public class Main {
                                 double amountToClear = grandTotal - availableCredit;
                                 throw new CreditLimitExceededException("Limit Exceeded! Customer must pay at least Rs. " + String.format("%.2f", amountToClear) + " in cash right now.");
                             }
-                            System.out.println("✅ Payment approved on credit!");
+                            System.out.println("[SUCCESS] Payment approved on credit!");
                             productDAO.updateCustomerDue(finalPhone, grandTotal, false); 
                             paymentSuccessful = true;
                         } catch (CreditLimitExceededException e) {
-                            System.out.println("🚨 ALERT: " + e.getMessage());
+                            System.out.println(" ALERT: " + e.getMessage());
                         }
                     }
                 } else {
-                    System.out.println("✅ Payment received via Cash/UPI. Thank you!");
+                    System.out.println("[SUCCESS] Payment received via Cash/UPI. Thank you!");
                     paymentSuccessful = true;
                 }
                 
                 // --- TRANSACTION LOGGING TO MYSQL ---
-                if (paymentSuccessful) {
-                    int newBillId = productDAO.saveBill(finalPhone, grandTotal, finalPayMode);
-                    if (newBillId != -1) {
-                        for (CartItem item : cart) {
-                            productDAO.saveBillItem(newBillId, item.getProductId(), item.getQuantity(), item.getItemTotal());
-                        }
-                        System.out.println("💾 Bill #" + newBillId + " saved to database securely.");
-                    }
-                }
+                // --- TRANSACTION LOGGING TO MYSQL & FEFO STOCK DEDUCTION ---
+if (paymentSuccessful) {
+    int newBillId = productDAO.saveBill(finalPhone, grandTotal, finalPayMode);
+    if (newBillId != -1) {
+        boolean stockUpdated = true;
+        for (CartItem item : cart) {
+            productDAO.saveBillItem(newBillId, item.getProductId(), item.getQuantity(), item.getItemTotal());
+            
+            // Deduct stock using FEFO logic across batches
+            boolean deducted = productDAO.deductStockFIFO(item.getProductId(), item.getQuantity());
+            if (!deducted) {
+                stockUpdated = false;
+            }
+        }
+        if (stockUpdated) {
+            System.out.println(" Bill #" + newBillId + " saved and inventory updated successfully!");
+        }
+    }
+}
                 
             } else if (choice.equals("4")) {
                 System.out.println("\n--- Open Customer Khata Account ---");
@@ -167,23 +178,34 @@ public class Main {
                 String phone = scanner.nextLine();
                 double[] creditInfo = productDAO.getCustomerCreditDetails(phone);
                 if (creditInfo == null) {
-                    System.out.println("❌ Customer not found.");
+                    System.out.println("[ERROR] Customer not found.");
                 } else {
                     System.out.println("-> Customer's Current Unpaid Due: Rs. " + String.format("%.2f", creditInfo[1]));
                     System.out.print("Enter amount being paid (Rs.): ");
                     double paymentAmt = Double.parseDouble(scanner.nextLine());
                     productDAO.updateCustomerDue(phone, paymentAmt, true);
-                    System.out.println("✅ Payment processed! Dues updated.");
+                    System.out.println("[SUCCESS] Payment processed! Dues updated.");
                 }
                 
             } else if (choice.equals("6")) {
                 productDAO.printExpiringStockReport();
                 
             } else if (choice.equals("7")) {
+                System.out.println("\n--- Restock Existing Product ---");
+                System.out.print("Enter exact Product Name: ");
+                String rName = scanner.nextLine();
+                System.out.print("Enter Quantity to Add: ");
+                int rQty = Integer.parseInt(scanner.nextLine());
+                System.out.print("Enter Expiry Date (YYYY-MM-DD): ");
+                String rDate = scanner.nextLine();
+                productDAO.restockProductByName(rName, rQty, rDate);
+            }
+              
+              else if (choice.equals("8")) {
                 System.out.println("Shutting down ShelfGuard POS... Have a great day!");
                 break; 
             } else {
-                System.out.println("❌ Invalid option. Please choose a number from 1 to 7.");
+                System.out.println("[ERROR] Invalid option. Please choose a number from 1 to 7.");
             }
         }
         scanner.close();
